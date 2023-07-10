@@ -17,8 +17,6 @@ pub enum PacketId {
     Ping,
     Pong,
     Message,
-    // A type of message that is base64 encoded
-    MessageBinary,
     Upgrade,
     Noop,
 }
@@ -26,10 +24,7 @@ pub enum PacketId {
 impl PacketId {
     /// Returns the byte that represents the [`PacketId`] as a [`char`].
     fn to_string_byte(self) -> u8 {
-        match self {
-            Self::MessageBinary => b'b',
-            _ => u8::from(self) + b'0',
-        }
+        u8::from(self) + b'0'
     }
 }
 
@@ -47,7 +42,6 @@ impl From<PacketId> for u8 {
             PacketId::Ping => 2,
             PacketId::Pong => 3,
             PacketId::Message => 4,
-            PacketId::MessageBinary => 4,
             PacketId::Upgrade => 5,
             PacketId::Noop => 6,
         }
@@ -116,14 +110,8 @@ impl TryFrom<Bytes> for Packet {
             return Err(Error::IncompletePacket());
         }
 
-        let is_base64 = *bytes.first().ok_or(Error::IncompletePacket())? == b'b';
-
         // only 'messages' packets could be encoded
-        let packet_id = if is_base64 {
-            PacketId::MessageBinary
-        } else {
-            (*bytes.first().ok_or(Error::IncompletePacket())?).try_into()?
-        };
+        let packet_id = (*bytes.first().ok_or(Error::IncompletePacket())?).try_into()?;
 
         if bytes.len() == 1 && packet_id == PacketId::Message {
             return Err(Error::IncompletePacket());
@@ -131,14 +119,7 @@ impl TryFrom<Bytes> for Packet {
 
         let data: Bytes = bytes.slice(1..);
 
-        Ok(Packet {
-            packet_id,
-            data: if is_base64 {
-                Bytes::from(general_purpose::STANDARD.decode(data.as_ref())?)
-            } else {
-                data
-            },
-        })
+        Ok(Packet { packet_id, data })
     }
 }
 
@@ -147,21 +128,20 @@ impl From<Packet> for Bytes {
     fn from(packet: Packet) -> Self {
         let mut result = BytesMut::with_capacity(packet.data.len() + 1);
         result.put_u8(packet.packet_id.to_string_byte());
-        if packet.packet_id == PacketId::MessageBinary {
-            result.extend(general_purpose::STANDARD.encode(packet.data).into_bytes());
-        } else {
-            result.put(packet.data);
-        }
+        result.put(packet.data);
         result.freeze()
     }
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct Payload(Vec<Packet>);
+pub(crate) struct StrPayload(Vec<Packet>);
 
-impl Payload {
+#[derive(Debug, Clone)]
+pub(crate) struct BinPayload(Vec<Packet>); // TODO
+
+impl StrPayload {
     // see https://en.wikipedia.org/wiki/Delimiter#ASCII_delimited_text
-    const SEPARATOR: char = '\x1e';
+    const SEPARATOR: char = ':';
 
     #[cfg(test)]
     pub fn len(&self) -> usize {
@@ -169,7 +149,7 @@ impl Payload {
     }
 }
 
-impl TryFrom<Bytes> for Payload {
+impl TryFrom<Bytes> for StrPayload {
     type Error = Error;
     /// Decodes a `payload` which in the `engine.io` context means a chain of normal
     /// packets separated by a certain SEPARATOR, in this case the delimiter `\x30`.
@@ -182,17 +162,17 @@ impl TryFrom<Bytes> for Payload {
     }
 }
 
-impl TryFrom<Payload> for Bytes {
+impl TryFrom<StrPayload> for Bytes {
     type Error = Error;
     /// Encodes a payload. Payload in the `engine.io` context means a chain of
     /// normal `packets` separated by a SEPARATOR, in this case the delimiter
     /// `\x30`.
-    fn try_from(packets: Payload) -> Result<Self> {
+    fn try_from(packets: StrPayload) -> Result<Self> {
         let mut buf = BytesMut::new();
         for packet in packets {
             // at the moment no base64 encoding is used
             buf.extend(Bytes::from(packet.clone()));
-            buf.put_u8(Payload::SEPARATOR as u8);
+            buf.put_u8(StrPayload::SEPARATOR as u8);
         }
 
         // remove the last separator
@@ -213,7 +193,7 @@ impl Iterator for IntoIter {
     }
 }
 
-impl IntoIterator for Payload {
+impl IntoIterator for StrPayload {
     type Item = Packet;
     type IntoIter = IntoIter;
     fn into_iter(self) -> <Self as std::iter::IntoIterator>::IntoIter {
@@ -223,7 +203,7 @@ impl IntoIterator for Payload {
     }
 }
 
-impl Index<usize> for Payload {
+impl Index<usize> for StrPayload {
     type Output = Packet;
     fn index(&self, index: usize) -> &Packet {
         &self.0[index]
@@ -267,7 +247,7 @@ mod tests {
     #[test]
     fn test_decode_payload() -> Result<()> {
         let data = Bytes::from_static(b"1Hello\x1e1HelloWorld");
-        let packets = Payload::try_from(data)?;
+        let packets = StrPayload::try_from(data)?;
 
         assert_eq!(packets[0].packet_id, PacketId::Close);
         assert_eq!(packets[0].data, Bytes::from_static(b"Hello"));
@@ -283,7 +263,7 @@ mod tests {
     #[test]
     fn test_binary_payload() {
         let data = Bytes::from_static(b"bSGVsbG8=\x1ebSGVsbG9Xb3JsZA==\x1ebSGVsbG8=");
-        let packets = Payload::try_from(data.clone()).unwrap();
+        let packets = StrPayload::try_from(data.clone()).unwrap();
 
         assert!(packets.len() == 3);
         assert_eq!(packets[0].packet_id, PacketId::MessageBinary);

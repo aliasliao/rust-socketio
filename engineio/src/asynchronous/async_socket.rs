@@ -15,7 +15,7 @@ use tokio::{runtime::Handle, sync::Mutex, time::Instant};
 use crate::{
     asynchronous::{callback::OptionalCallback, transport::AsyncTransportType},
     error::Result,
-    packet::{HandshakePacket, Payload},
+    packet::{HandshakePacket, StrPayload},
     Error, Packet, PacketId,
 };
 
@@ -117,7 +117,7 @@ impl Socket {
     /// Helper method that parses bytes and returns an iterator over the elements.
     fn parse_payload(bytes: Bytes) -> impl Stream<Item = Result<Packet>> {
         try_stream! {
-            let payload = Payload::try_from(bytes);
+            let payload = StrPayload::try_from(bytes);
 
             for elem in payload?.into_iter() {
                 yield elem;

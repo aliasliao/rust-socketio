@@ -2,7 +2,7 @@ use crate::callback::OptionalCallback;
 use crate::transport::TransportType;
 
 use crate::error::{Error, Result};
-use crate::packet::{HandshakePacket, Packet, PacketId, Payload};
+use crate::packet::{HandshakePacket, Packet, PacketId, StrPayload};
 use bytes::Bytes;
 use std::convert::TryFrom;
 use std::sync::RwLock;
@@ -134,7 +134,7 @@ impl Socket {
                     continue;
                 }
 
-                let payload = Payload::try_from(data)?;
+                let payload = StrPayload::try_from(data)?;
                 let mut iter = payload.into_iter();
 
                 if let Some(packet) = iter.next() {
