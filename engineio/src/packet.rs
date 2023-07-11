@@ -139,45 +139,48 @@ pub(crate) struct StrPayload(Vec<Packet>);
 #[derive(Debug, Clone)]
 pub(crate) struct BinPayload(Vec<Packet>); // TODO
 
-impl StrPayload {
-    // see https://en.wikipedia.org/wiki/Delimiter#ASCII_delimited_text
-    const SEPARATOR: char = ':';
-
-    #[cfg(test)]
-    pub fn len(&self) -> usize {
-        self.0.len()
+// 6:4hello2:4€
+// 2:4€10:b4AQIDBA==
+impl TryFrom<Bytes> for StrPayload {
+    type Error = Error;
+    fn try_from(payload: Bytes) -> Result<Self> {
+        // TODO
     }
 }
 
-impl TryFrom<Bytes> for StrPayload {
+/**
+ * buffer <00 04 ff 34 e2 82 ac 01 04 ff 01 02 03 04>
+ *
+ * with:
+ *
+ * 00              => string header
+ * 04              => string length in bytes
+ * ff              => separator
+ * 34              => "message" packet type ("4")
+ * e2 82 ac        => "€"
+ * 01              => binary header
+ * 04              => buffer length in bytes
+ * ff              => separator
+ * 01 02 03 04     => buffer content
+ */
+impl TryFrom(Bytes) for BinPayload {
     type Error = Error;
-    /// Decodes a `payload` which in the `engine.io` context means a chain of normal
-    /// packets separated by a certain SEPARATOR, in this case the delimiter `\x30`.
     fn try_from(payload: Bytes) -> Result<Self> {
-        payload
-            .split(|&c| c as char == Self::SEPARATOR)
-            .map(|slice| Packet::try_from(payload.slice_ref(slice)))
-            .collect::<Result<Vec<_>>>()
-            .map(Self)
+        // TODO
     }
 }
 
 impl TryFrom<StrPayload> for Bytes {
     type Error = Error;
-    /// Encodes a payload. Payload in the `engine.io` context means a chain of
-    /// normal `packets` separated by a SEPARATOR, in this case the delimiter
-    /// `\x30`.
     fn try_from(packets: StrPayload) -> Result<Self> {
-        let mut buf = BytesMut::new();
-        for packet in packets {
-            // at the moment no base64 encoding is used
-            buf.extend(Bytes::from(packet.clone()));
-            buf.put_u8(StrPayload::SEPARATOR as u8);
-        }
+        // TODO
+    }
+}
 
-        // remove the last separator
-        let _ = buf.split_off(buf.len() - 1);
-        Ok(buf.freeze())
+impl TryFrom(BinPayload) for Bytes {
+    type Error = Error;
+    fn try_from(packets: BinPayload) -> Result<Self> {
+        // TODO
     }
 }
 
@@ -265,7 +268,7 @@ mod tests {
         let data = Bytes::from_static(b"bSGVsbG8=\x1ebSGVsbG9Xb3JsZA==\x1ebSGVsbG8=");
         let packets = StrPayload::try_from(data.clone()).unwrap();
 
-        assert!(packets.len() == 3);
+        assert!(packets.0.len() == 3);
         assert_eq!(packets[0].packet_id, PacketId::MessageBinary);
         assert_eq!(packets[0].data, Bytes::from_static(b"Hello"));
         assert_eq!(packets[1].packet_id, PacketId::MessageBinary);
