@@ -100,6 +100,12 @@ impl Packet {
     }
 }
 
+// 4HelloWorld
+// 2probe
+// 4€
+// b4AQIDBA==
+// <255 52 104 101 108 108 111>
+// <255 4 1 2 3 4>
 impl TryFrom<Bytes> for Packet {
     type Error = Error;
     /// Decodes a single `Packet` from an `u8` byte stream.
@@ -134,10 +140,22 @@ impl From<Packet> for Bytes {
 }
 
 #[derive(Debug, Clone)]
+pub(crate) struct FramePayload(Packet);
+
+#[derive(Debug, Clone)]
 pub(crate) struct StrPayload(Vec<Packet>);
 
 #[derive(Debug, Clone)]
 pub(crate) struct BinPayload(Vec<Packet>); // TODO
+
+// 4HelloWorld
+// 2probe
+impl TryFrom<Bytes> for FramePayload {
+    type Error = Error;
+    fn try_from(payload: Bytes) -> Result<Self> {
+
+    }
+}
 
 // 6:4hello2:4€
 // 2:4€10:b4AQIDBA==
@@ -149,19 +167,17 @@ impl TryFrom<Bytes> for StrPayload {
 }
 
 /**
- * buffer <00 04 ff 34 e2 82 ac 01 04 ff 01 02 03 04>
- *
- * with:
- *
- * 00              => string header
- * 04              => string length in bytes
- * ff              => separator
- * 34              => "message" packet type ("4")
- * e2 82 ac        => "€"
- * 01              => binary header
- * 04              => buffer length in bytes
- * ff              => separator
- * 01 02 03 04     => buffer content
+  * 0                    => string
+  * 6                    => byte length
+  * 255                  => delimiter
+  * 52                   => 4 (MESSAGE packet type)
+  * 104 101 108 108 111  => "hello"
+  * 1                    => binary
+  * 5                    => byte length
+  * 255                  => delimiter
+  * 4                    => 4 (MESSAGE packet type)
+  * 1 2 3 4              => binary message
+  * Uint8Array.from([0, 6, 255, 52, 104, 101, 108, 108, 111, 1, 5, 255, 4, 1, 2, 3, 4]).buffer;
  */
 impl TryFrom(Bytes) for BinPayload {
     type Error = Error;
