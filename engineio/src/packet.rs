@@ -7,6 +7,7 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter, Result as FmtResult, Write};
 use std::ops::Index;
+use std::str::from_utf8;
 
 use crate::error::{Error, Result};
 /// Enumeration of the `engine.io` `Packet` types.
@@ -100,37 +101,7 @@ impl Packet {
     }
 }
 
-// 4HelloWorld
-// 2probe
-// 4€
-// b4AQIDBA==
-// <255 52 104 101 108 108 111>
-// <255 4 1 2 3 4>
-impl TryFrom<Bytes> for Packet {
-    type Error = Error;
-    /// Decodes a single `Packet` from an `u8` byte stream.
-    fn try_from(
-        bytes: Bytes,
-    ) -> std::result::Result<Self, <Self as std::convert::TryFrom<Bytes>>::Error> {
-        if bytes.is_empty() {
-            return Err(Error::IncompletePacket());
-        }
-
-        // only 'messages' packets could be encoded
-        let packet_id = (*bytes.first().ok_or(Error::IncompletePacket())?).try_into()?;
-
-        if bytes.len() == 1 && packet_id == PacketId::Message {
-            return Err(Error::IncompletePacket());
-        }
-
-        let data: Bytes = bytes.slice(1..);
-
-        Ok(Packet { packet_id, data })
-    }
-}
-
 impl From<Packet> for Bytes {
-    /// Encodes a `Packet` into an `u8` byte stream.
     fn from(packet: Packet) -> Self {
         let mut result = BytesMut::with_capacity(packet.data.len() + 1);
         result.put_u8(packet.packet_id.to_string_byte());
@@ -152,8 +123,19 @@ pub(crate) struct BinPayload(Vec<Packet>); // TODO
 // 2probe
 impl TryFrom<Bytes> for FramePayload {
     type Error = Error;
-    fn try_from(payload: Bytes) -> Result<Self> {
+    fn try_from(bytes: Bytes) -> Result<Self> {
+        let packet_id = (*bytes.first().ok_or(Error::IncompletePacket())?).try_into()?;
+        let data = bytes.slice(1..);
 
+        let packet = Packet { packet_id, data };
+        Ok(Self(packet))
+    }
+}
+
+impl TryFrom<FramePayload> for Bytes {
+    type Error = Error;
+    fn try_from(payload: FramePayload) -> Result<Self> {
+        payload.0.try_into()
     }
 }
 
@@ -161,7 +143,14 @@ impl TryFrom<Bytes> for FramePayload {
 // 2:4€10:b4AQIDBA==
 impl TryFrom<Bytes> for StrPayload {
     type Error = Error;
-    fn try_from(payload: Bytes) -> Result<Self> {
+    fn try_from(bytes: Bytes) -> Result<Self> {
+        let str = from_utf8(bytes.as_ref())?;
+    }
+}
+
+impl TryFrom<StrPayload> for Bytes {
+    type Error = Error;
+    fn try_from(packets: StrPayload) -> Result<Self> {
         // TODO
     }
 }
@@ -182,13 +171,6 @@ impl TryFrom<Bytes> for StrPayload {
 impl TryFrom(Bytes) for BinPayload {
     type Error = Error;
     fn try_from(payload: Bytes) -> Result<Self> {
-        // TODO
-    }
-}
-
-impl TryFrom<StrPayload> for Bytes {
-    type Error = Error;
-    fn try_from(packets: StrPayload) -> Result<Self> {
         // TODO
     }
 }
