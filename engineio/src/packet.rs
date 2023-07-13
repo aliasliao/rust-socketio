@@ -145,6 +145,20 @@ impl TryFrom<Bytes> for StrPayload {
     type Error = Error;
     fn try_from(bytes: Bytes) -> Result<Self> {
         let str = from_utf8(bytes.as_ref())?;
+        let mut chars = str.chars();
+        let len = chars.count();
+        let cur = 0;
+        loop {
+            let i = cur;
+            let mut j = cur;
+            let c = chars.next().ok_or(Error::IncompletePacket())?;
+            if c.is_numeric() {
+                j += 1;
+            } else if c == ':' {
+
+            }
+        }
+        ()
     }
 }
 
