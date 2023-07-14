@@ -146,19 +146,65 @@ impl TryFrom<Bytes> for StrPayload {
     fn try_from(bytes: Bytes) -> Result<Self> {
         let str = from_utf8(bytes.as_ref())?;
         let mut chars = str.chars();
-        let len = chars.count();
-        let cur = 0;
-        loop {
-            let i = cur;
-            let mut j = cur;
-            let c = chars.next().ok_or(Error::IncompletePacket())?;
-            if c.is_numeric() {
-                j += 1;
-            } else if c == ':' {
 
+        let mut packets: Vec<Packet> = Vec::new();
+        let mut is_bin = false;
+
+        loop {
+            let mut cnt = 0;
+            loop {
+                match chars.next() {
+                    Some(c) => {
+                        match c {
+                            '0'..='9' => cnt += cnt * 10 + c - '0',
+                            ':' => break,
+                            _ => return Err(Error::IncompletePacket()),
+                        }
+                    }
+                    None => return Err(Error::IncompletePacket())
+                }
+            }
+            if cnt == 0 {
+                return Err(Error::IncompletePacket())
+            }
+
+            let packet_id = match chars.next() {
+                Some(c) => {
+                    match c {
+                        '0'..='9' => {
+                            cnt -= 1;
+                            PacketId::try_from(c - '0')?
+                        }
+                        'b' => {
+                            cnt -= 2;
+                            is_bin = true;
+                            PacketId::try_from(chars.next() - '0')?
+                        }
+                        _ => return Err(Error::IncompletePacket())
+                    }
+                }
+                None => return Err(Error::IncompletePacket())
+            };
+            let mut str = "";
+            for _ in 0..cnt {
+                str += chars.next().ok_or(Error::IncompletePacket())?
+            }
+
+            packets.push(Packet {
+                packet_id,
+                data: if is_bin {
+                    Bytes::from(general_purpose::STANDARD.decode(str))
+                } else {
+                    Bytes::from(str)
+                },
+            });
+
+            if chars.clone().next().is_none() {
+                break;
             }
         }
-        ()
+
+        Ok(Self(packets))
     }
 }
 
