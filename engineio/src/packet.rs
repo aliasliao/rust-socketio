@@ -164,9 +164,6 @@ impl TryFrom<Bytes> for StrPayload {
                     None => return Err(Error::IncompletePacket())
                 }
             }
-            if cnt == 0 {
-                return Err(Error::IncompletePacket())
-            }
 
             let packet_id = match chars.next() {
                 Some(c) => {
@@ -185,6 +182,11 @@ impl TryFrom<Bytes> for StrPayload {
                 }
                 None => return Err(Error::IncompletePacket())
             };
+
+            if cnt < 0 || (packet_id == PacketId::Message && cnt == 0) {
+                return Err(Error::IncompletePacket())
+            }
+
             let mut str = "";
             for _ in 0..cnt {
                 str += chars.next().ok_or(Error::IncompletePacket())?
@@ -193,7 +195,7 @@ impl TryFrom<Bytes> for StrPayload {
             packets.push(Packet {
                 packet_id,
                 data: if is_bin {
-                    Bytes::from(general_purpose::STANDARD.decode(str))
+                    Bytes::from(general_purpose::STANDARD.decode(str)?)
                 } else {
                     Bytes::from(str)
                 },
@@ -211,7 +213,11 @@ impl TryFrom<Bytes> for StrPayload {
 impl TryFrom<StrPayload> for Bytes {
     type Error = Error;
     fn try_from(packets: StrPayload) -> Result<Self> {
-        // TODO
+        let mut result = BytesMut::new();
+        for packet in packets.0 {
+
+        }
+        ()
     }
 }
 
