@@ -220,7 +220,7 @@ impl TryFrom<StrPayload> for Bytes {
             let data_base64 = general_purpose::STANDARD.encode(packet.data);
             let cnt = 1 + 1 + data_base64.len();
             let str = format!("{}:b{}{}", cnt.to_string(), packet.packet_id, data_base64);
-            result.put(().into_bytes());
+            result.put(str.into_bytes());
         }
         Ok(result.freeze())
     }
