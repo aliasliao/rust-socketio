@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::char;
 use std::convert::TryFrom;
 use std::convert::TryInto;
-use std::fmt::{Display, Formatter, Result as FmtResult, Write};
+use std::fmt::{Display, format, Formatter, Result as FmtResult, Write};
 use std::ops::Index;
 use std::str::from_utf8;
 
@@ -210,14 +210,19 @@ impl TryFrom<Bytes> for StrPayload {
     }
 }
 
+// 6:4hello2:4€
+// 2:4€10:b4AQIDBA==
 impl TryFrom<StrPayload> for Bytes {
     type Error = Error;
     fn try_from(packets: StrPayload) -> Result<Self> {
         let mut result = BytesMut::new();
         for packet in packets.0 {
-
+            let data_base64 = general_purpose::STANDARD.encode(packet.data);
+            let cnt = 1 + 1 + data_base64.len();
+            let str = format!("{}:b{}{}", cnt.to_string(), packet.packet_id, data_base64);
+            result.put(().into_bytes());
         }
-        ()
+        Ok(result.freeze())
     }
 }
 
